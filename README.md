@@ -39,6 +39,18 @@ python run.py --port 8000 --install-ollama --models "ollama:llama3,huggingface:g
 - `--models`: Comma-separated list of models to ensure are downloaded on startup.
 - `--ngrok`: Expose the server via an ngrok public URL.
 - `--ngrok-token`: Your ngrok authentication token.
+- `--hf-cache`: Custom directory for Hugging Face models.
+- `--ollama-host`: Custom URL for the Ollama server.
+
+### Configuration
+
+You can also use a `.env` file to manage settings:
+
+```env
+HF_CACHE_DIR=/path/to/cache
+OLLAMA_HOST=http://localhost:11434
+NGROK_AUTHTOKEN=your_token
+```
 
 ### API Endpoints
 

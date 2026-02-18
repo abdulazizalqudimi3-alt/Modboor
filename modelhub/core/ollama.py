@@ -1,17 +1,24 @@
 import ollama
 from typing import List, Dict, Any, Optional
 from .base import BaseModelManager
+from modelhub.config.settings import settings
+import os
 
 class OllamaManager(BaseModelManager):
     """
     Manager for Ollama models.
     """
 
+    def _setup_client(self):
+        if settings.OLLAMA_HOST:
+            os.environ["OLLAMA_HOST"] = settings.OLLAMA_HOST
+
     def list_models(self) -> List[Dict[str, Any]]:
         """
         List all downloaded Ollama models.
         """
         try:
+            self._setup_client()
             response = ollama.list()
             models = []
             # In recent ollama versions, it returns an object with a 'models' attribute
@@ -34,6 +41,7 @@ class OllamaManager(BaseModelManager):
         Pull a model from Ollama library.
         """
         try:
+            self._setup_client()
             print(f"Pulling Ollama model: {model_name}...")
             ollama.pull(model_name)
             return True
@@ -46,6 +54,7 @@ class OllamaManager(BaseModelManager):
         Delete a model from Ollama.
         """
         try:
+            self._setup_client()
             ollama.delete(model_name)
             return True
         except Exception as e:
@@ -57,6 +66,7 @@ class OllamaManager(BaseModelManager):
         Generate response using Ollama.
         """
         try:
+            self._setup_client()
             response = ollama.generate(model=model_name, prompt=prompt, **kwargs)
             return response.get('response', '')
         except Exception as e:
@@ -67,6 +77,7 @@ class OllamaManager(BaseModelManager):
         Check if Ollama server is running.
         """
         try:
+            self._setup_client()
             ollama.list()
             return True
         except Exception:

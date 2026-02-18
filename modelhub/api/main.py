@@ -3,9 +3,10 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from modelhub.core.factory import ModelManagerFactory
 from modelhub.utils.system import install_ollama, is_ollama_installed
+from modelhub.config.settings import settings
 import uvicorn
 
-app = FastAPI(title="AI Model Hub API")
+app = FastAPI(title=settings.API_TITLE)
 
 class DownloadRequest(BaseModel):
     source: str # 'huggingface' or 'ollama'
@@ -66,7 +67,7 @@ def inference(request: InferenceRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/system/install-ollama")
-async def trigger_ollama_install():
+def trigger_ollama_install():
     """Trigger Ollama installation on the system."""
     if is_ollama_installed():
         return {"message": "Ollama is already installed."}

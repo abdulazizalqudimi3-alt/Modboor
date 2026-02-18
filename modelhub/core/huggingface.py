@@ -2,6 +2,7 @@ import os
 from typing import List, Dict, Any, Optional
 from huggingface_hub import hf_hub_download, list_repo_files, snapshot_download, scan_cache_dir
 from .base import BaseModelManager
+from modelhub.config.settings import settings
 
 class HuggingFaceManager(BaseModelManager):
     """
@@ -13,7 +14,7 @@ class HuggingFaceManager(BaseModelManager):
         List all downloaded HF models from the local cache.
         """
         try:
-            cache_info = scan_cache_dir()
+            cache_info = scan_cache_dir(cache_dir=settings.HF_CACHE_DIR)
             models = []
             for repo in cache_info.repos:
                 if repo.repo_type == "model":
@@ -35,6 +36,8 @@ class HuggingFaceManager(BaseModelManager):
         """
         try:
             print(f"Downloading HF model: {model_name}...")
+            if "cache_dir" not in kwargs and settings.HF_CACHE_DIR:
+                kwargs["cache_dir"] = settings.HF_CACHE_DIR
             snapshot_download(repo_id=model_name, **kwargs)
             return True
         except Exception as e:
@@ -48,7 +51,7 @@ class HuggingFaceManager(BaseModelManager):
         For simplicity, we'll try to find the revision and delete it.
         """
         try:
-            cache_info = scan_cache_dir()
+            cache_info = scan_cache_dir(cache_dir=settings.HF_CACHE_DIR)
             for repo in cache_info.repos:
                 if repo.repo_id == model_name:
                     delete_strategy = cache_info.delete_revisions(*[r.commit_hash for r in repo.revisions])
