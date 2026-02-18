@@ -33,19 +33,25 @@ Dependencies: `fastapi`, `uvicorn`, `ollama`, `huggingface-hub`, `pyngrok`, `pyd
 ## 💻 Usage as a Library
 
 ```python
-from modelhub import start_server, ModelService
+from modelhub import start_server, ModelService, HuggingFaceManager, OllamaManager
 
 # Start the server programmatically
 start_server(
     port=8000,
     public=True,
     auto_install_ollama=True,
-    initial_models=["ollama:llama3"]
+    initial_models=["ollama:llama3", "hf:gpt2"]
 )
 
-# Use the service directly
-service = ModelService()
-models = service.list_all_models()
+# Use HuggingFaceManager directly
+hf = HuggingFaceManager()
+hf.download_model("gpt2")
+models = hf.list_downloaded_models()
+
+# Use OllamaManager directly
+ollama_mgr = OllamaManager()
+ollama_mgr.pull_model("llama3")
+models = ollama_mgr.list_models()
 ```
 
 ## 🌐 API Reference

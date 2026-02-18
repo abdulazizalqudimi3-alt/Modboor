@@ -18,7 +18,7 @@ class InferenceResponse(BaseModel):
     source: str
 
 class ModelLoadRequest(BaseModel):
-    source: str
+    source: Optional[str] = None
     model_name: str
     kwargs: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
@@ -30,3 +30,6 @@ class StatusResponse(BaseModel):
 class MessageResponse(BaseModel):
     message: str
     success: bool = True
+
+class OllamaPullRequest(BaseModel):
+    model_name: str

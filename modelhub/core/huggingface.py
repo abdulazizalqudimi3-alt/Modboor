@@ -15,6 +15,10 @@ class HuggingFaceManager(BaseModelManager):
     _model_cache: Dict[str, Any] = {}
 
     def list_models(self) -> List[Dict[str, Any]]:
+        """Alias for list_downloaded_models"""
+        return self.list_downloaded_models()
+
+    def list_downloaded_models(self) -> List[Dict[str, Any]]:
         try:
             cache_info = scan_cache_dir(cache_dir=settings.HF_CACHE_DIR)
             models = []
@@ -100,10 +104,28 @@ class HuggingFaceManager(BaseModelManager):
             logger.error(f"Error getting HF model info for {model_name}: {e}")
             return None
 
+    def load_model(self, model_name: str, **kwargs) -> bool:
+        """Explicitly load a model into memory."""
+        try:
+            from transformers import pipeline
+            task = kwargs.get("task", "text-generation")
+            cache_key = f"{model_name}:{task}"
+            if cache_key not in self._model_cache:
+                logger.info(f"Loading HF model {model_name} for task {task}...")
+                self._model_cache[cache_key] = pipeline(task, model=model_name, **kwargs)
+            return True
+        except Exception as e:
+            logger.error(f"Error loading HF model {model_name}: {e}")
+            return False
+
     def unload_model(self, model_name: str) -> bool:
         """Specific for HF to free memory."""
-        if model_name in self._model_cache:
-            del self._model_cache[model_name]
+        # Check all tasks for this model
+        keys_to_del = [k for k in self._model_cache if k.startswith(f"{model_name}:")]
+        if keys_to_del:
+            for k in keys_to_del:
+                del self._model_cache[k]
+
             import gc
             import torch
             gc.collect()

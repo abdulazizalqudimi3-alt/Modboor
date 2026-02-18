@@ -7,7 +7,7 @@ import asyncio
 
 from modelhub.api.schemas import (
     ModelDownloadRequest, InferenceRequest, InferenceResponse,
-    ModelLoadRequest, StatusResponse, MessageResponse
+    ModelLoadRequest, StatusResponse, MessageResponse, OllamaPullRequest
 )
 from modelhub.core.service import ModelService
 from modelhub.utils.system import install_ollama, is_ollama_installed, start_ollama, stop_ollama
@@ -59,9 +59,34 @@ async def list_models():
     """List all models from all available sources."""
     return await model_service.list_all_models()
 
-@app.get("/models/{source}/{model_name:path}")
-async def get_model_info(source: str, model_name: str):
+@app.get("/models/{model_name:path}")
+async def get_model_info(model_name: str, source: Optional[str] = None):
     """Get detailed information about a specific model."""
+    if not source and ":" in model_name:
+        parts = model_name.split(":", 1)
+        if parts[0].lower() in ["huggingface", "hf", "ollama"]:
+            source = parts[0].lower()
+            model_name = parts[1]
+
+    if not source:
+        source = await model_service.find_model_source(model_name)
+
+    if not source:
+        # Try both sources if still not found
+        for s in model_service.managers:
+            info = await model_service.get_info(s, model_name)
+            if info:
+                return info
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    info = await model_service.get_info(source, model_name)
+    if not info:
+        raise HTTPException(status_code=404, detail="Model info not found")
+    return info
+
+@app.get("/models/{source}/{model_name:path}")
+async def get_model_info_by_source(source: str, model_name: str):
+    """Get detailed information about a specific model from a specific source."""
     info = await model_service.get_info(source, model_name)
     if not info:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -73,9 +98,29 @@ async def download_model(request: ModelDownloadRequest, background_tasks: Backgr
     background_tasks.add_task(model_service.download_model, request.source, request.model_name, **request.kwargs)
     return {"message": f"Download of {request.model_name} from {request.source} started in background.", "success": True}
 
-@app.delete("/models/{source}/{model_name:path}", response_model=MessageResponse)
-async def delete_model(source: str, model_name: str):
+@app.delete("/models/{model_name:path}", response_model=MessageResponse)
+async def delete_model(model_name: str, source: Optional[str] = None):
     """Delete a model from local storage."""
+    if not source and ":" in model_name:
+        parts = model_name.split(":", 1)
+        if parts[0].lower() in ["huggingface", "hf", "ollama"]:
+            source = parts[0].lower()
+            model_name = parts[1]
+
+    if not source:
+        source = await model_service.find_model_source(model_name)
+
+    if not source:
+        raise HTTPException(status_code=404, detail="Model not found to delete")
+
+    success = await model_service.delete_model(source, model_name)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to delete model")
+    return {"message": f"Model {model_name} deleted successfully.", "success": True}
+
+@app.delete("/models/{source}/{model_name:path}", response_model=MessageResponse)
+async def delete_model_by_source(source: str, model_name: str):
+    """Delete a model from a specific source."""
     success = await model_service.delete_model(source, model_name)
     if not success:
         raise HTTPException(status_code=400, detail="Failed to delete model")
@@ -84,14 +129,41 @@ async def delete_model(source: str, model_name: str):
 @app.post("/models/load", response_model=MessageResponse)
 async def load_model(request: ModelLoadRequest, background_tasks: BackgroundTasks):
     """Load a model into memory."""
-    success = await model_service.load_model(request.source, request.model_name, **request.kwargs)
+    source = request.source
+    model_name = request.model_name
+
+    if not source and ":" in model_name:
+        parts = model_name.split(":", 1)
+        if parts[0].lower() in ["huggingface", "hf", "ollama"]:
+            source = parts[0].lower()
+            model_name = parts[1]
+
+    if not source:
+        source = await model_service.find_model_source(model_name)
+
+    if not source:
+        raise HTTPException(status_code=404, detail="Model source not found to load")
+
+    success = await model_service.load_model(source, model_name, **request.kwargs)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to load model")
     return {"message": f"Model {request.model_name} loaded successfully.", "success": True}
 
 @app.post("/models/unload", response_model=MessageResponse)
-async def unload_model(source: str, model_name: str):
+async def unload_model(model_name: str, source: Optional[str] = None):
     """Unload a model from memory."""
+    if not source and ":" in model_name:
+        parts = model_name.split(":", 1)
+        if parts[0].lower() in ["huggingface", "hf", "ollama"]:
+            source = parts[0].lower()
+            model_name = parts[1]
+
+    if not source:
+        source = await model_service.find_model_source(model_name)
+
+    if not source:
+        raise HTTPException(status_code=404, detail="Model source not found to unload")
+
     success = await model_service.unload_model(source, model_name)
     if not success:
         raise HTTPException(status_code=400, detail="Failed to unload model")
@@ -143,10 +215,10 @@ async def list_ollama_models():
     return ModelService().managers['ollama'].list_models()
 
 @app.post("/ollama/models/pull", response_model=MessageResponse)
-async def pull_ollama_model(model_name: str, background_tasks: BackgroundTasks):
+async def pull_ollama_model(request: OllamaPullRequest, background_tasks: BackgroundTasks):
     """Pull a model to Ollama in background."""
-    background_tasks.add_task(ModelService().managers['ollama'].download_model, model_name)
-    return {"message": f"Pulling {model_name} started.", "success": True}
+    background_tasks.add_task(ModelService().managers['ollama'].download_model, request.model_name)
+    return {"message": f"Pulling {request.model_name} started.", "success": True}
 
 @app.delete("/ollama/models/{model_name}", response_model=MessageResponse)
 async def remove_ollama_model(model_name: str):

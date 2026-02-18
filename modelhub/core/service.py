@@ -2,6 +2,12 @@ from typing import List, Dict, Any, Optional
 from .factory import ModelManagerFactory
 from modelhub.config.logging_config import get_logger
 from modelhub.config.settings import settings
+from modelhub.utils.system import (
+    install_ollama as sys_install_ollama,
+    is_ollama_installed as sys_is_ollama_installed,
+    start_ollama as sys_start_ollama,
+    stop_ollama as sys_stop_ollama
+)
 import asyncio
 
 logger = get_logger(__name__)
@@ -31,15 +37,31 @@ class ModelService:
             results[source] = manager.list_models()
         return results
 
+    async def find_model_source(self, model_name: str) -> Optional[str]:
+        """Try to find which source a model belongs to."""
+        for source, manager in self.managers.items():
+            models = manager.list_models()
+            if any(m['name'] == model_name for m in models):
+                return source
+        return None
+
     async def download_model(self, source: str, model_name: str, **kwargs) -> bool:
         manager = ModelManagerFactory.get_manager(source)
         # Run in thread pool as download is blocking
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, lambda: manager.download_model(model_name, **kwargs))
 
+    async def pull_model(self, source: str, model_name: str, **kwargs) -> bool:
+        """Alias for download_model"""
+        return await self.download_model(source, model_name, **kwargs)
+
     async def delete_model(self, source: str, model_name: str) -> bool:
         manager = ModelManagerFactory.get_manager(source)
         return manager.delete_model(model_name)
+
+    async def remove_model(self, source: str, model_name: str) -> bool:
+        """Alias for delete_model"""
+        return await self.delete_model(source, model_name)
 
     async def generate_response(self, source: str, model_name: str, prompt: str, **kwargs) -> str:
         manager = ModelManagerFactory.get_manager(source)
@@ -79,6 +101,19 @@ class ModelService:
                 source: manager.is_available() for source, manager in self.managers.items()
             }
         }
+
+    # Ollama direct management
+    def install_ollama(self):
+        return sys_install_ollama()
+
+    def is_ollama_installed(self):
+        return sys_is_ollama_installed()
+
+    def start_ollama(self):
+        return sys_start_ollama()
+
+    def stop_ollama(self):
+        return sys_stop_ollama()
 
     async def initialize_defaults(self):
         """Pre-downloads initial models if specified in settings."""

@@ -4,6 +4,12 @@ from typing import List, Dict, Any, Optional
 from .base import BaseModelManager
 from modelhub.config.settings import settings
 from modelhub.config.logging_config import get_logger
+from modelhub.utils.system import (
+    install_ollama as sys_install_ollama,
+    is_ollama_installed as sys_is_ollama_installed,
+    start_ollama as sys_start_ollama,
+    stop_ollama as sys_stop_ollama
+)
 
 logger = get_logger(__name__)
 
@@ -36,6 +42,10 @@ class OllamaManager(BaseModelManager):
             return []
 
     def download_model(self, model_name: str, **kwargs) -> bool:
+        """Alias for pull_model"""
+        return self.pull_model(model_name, **kwargs)
+
+    def pull_model(self, model_name: str, **kwargs) -> bool:
         try:
             self._setup_client()
             logger.info(f"Pulling Ollama model: {model_name}...")
@@ -46,6 +56,10 @@ class OllamaManager(BaseModelManager):
             return False
 
     def delete_model(self, model_name: str) -> bool:
+        """Alias for remove_model"""
+        return self.remove_model(model_name)
+
+    def remove_model(self, model_name: str) -> bool:
         try:
             self._setup_client()
             ollama.delete(model_name)
@@ -89,3 +103,15 @@ class OllamaManager(BaseModelManager):
         except Exception as e:
             logger.error(f"Error running Ollama model {model_name}: {e}")
             return False
+
+    def install_ollama(self):
+        return sys_install_ollama()
+
+    def is_ollama_installed(self):
+        return sys_is_ollama_installed()
+
+    def start_ollama(self):
+        return sys_start_ollama()
+
+    def stop_ollama(self):
+        return sys_stop_ollama()
