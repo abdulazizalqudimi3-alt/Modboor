@@ -36,3 +36,13 @@ class BaseModelManager(ABC):
     def get_model_info(self, model_name: str) -> Optional[Dict[str, Any]]:
         """Get detailed information about a model."""
         pass
+
+    @abstractmethod
+    def load_model(self, model_name: str, **kwargs) -> bool:
+        """Load a model into memory."""
+        pass
+
+    @abstractmethod
+    def unload_model(self, model_name: str) -> bool:
+        """Unload a model from memory."""
+        pass

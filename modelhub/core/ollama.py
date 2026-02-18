@@ -145,6 +145,10 @@ class OllamaManager(BaseModelManager):
             logger.error(f"Error getting Ollama model info for {model_name}: {e}")
             return None
 
+    def load_model(self, model_name: str, **kwargs) -> bool:
+        """Alias for run_model to satisfy interface."""
+        return self.run_model(model_name)
+
     def run_model(self, model_name: str) -> bool:
         """
         Load a model into memory in Ollama and keep it alive.
@@ -162,6 +166,19 @@ class OllamaManager(BaseModelManager):
             return True
         except Exception as e:
             logger.error(f"Error running Ollama model {model_name}: {e}")
+            return False
+
+    def unload_model(self, model_name: str) -> bool:
+        """
+        Unload an Ollama model from memory by setting keep_alive to 0.
+        """
+        try:
+            self._setup_client()
+            logger.info(f"Unloading Ollama model {model_name}...")
+            ollama.generate(model=model_name, prompt="", keep_alive=0)
+            return True
+        except Exception as e:
+            logger.error(f"Error unloading Ollama model {model_name}: {e}")
             return False
 
     def install_ollama(self) -> (bool, str):
