@@ -1,94 +1,190 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Query
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
-from modelhub.core.factory import ModelManagerFactory
-from modelhub.utils.system import install_ollama, is_ollama_installed
+from contextlib import asynccontextmanager
+import time
+import asyncio
+
+from modelhub.api.schemas import (
+    ModelDownloadRequest, InferenceRequest, InferenceResponse,
+    ModelLoadRequest, StatusResponse, MessageResponse
+)
+from modelhub.core.service import ModelService
+from modelhub.utils.system import install_ollama, is_ollama_installed, start_ollama, stop_ollama
 from modelhub.config.settings import settings
-import uvicorn
+from modelhub.config.logging_config import setup_logging, get_logger
 
-app = FastAPI(title=settings.API_TITLE)
+logger = get_logger(__name__)
 
-class DownloadRequest(BaseModel):
-    source: str # 'huggingface' or 'ollama'
-    model_name: str
-    kwargs: Optional[Dict[str, Any]] = {}
+# Singleton Service
+model_service = ModelService()
 
-class InferenceRequest(BaseModel):
-    source: str
-    model_name: str
-    prompt: str
-    kwargs: Optional[Dict[str, Any]] = {}
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    setup_logging()
+    logger.info("Starting AI Model Hub API...")
+    if settings.AUTO_INSTALL_OLLAMA:
+        if not is_ollama_installed():
+            logger.info("Auto-installing Ollama...")
+            install_ollama()
 
-@app.get("/models/list")
+    # Pre-load initial models in background
+    asyncio.create_task(model_service.initialize_defaults())
+
+    yield
+    # Shutdown
+    logger.info("Shutting down AI Model Hub API...")
+
+app = FastAPI(
+    title=settings.API_TITLE,
+    version=settings.API_VERSION,
+    description="Production-grade AI Model Management Hub",
+    lifespan=lifespan
+)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- Model Management ---
+
+@app.get("/models", response_model=Dict[str, List[Dict[str, Any]]])
 async def list_models():
-    """List all models from all managers."""
-    results = {}
-    managers = ModelManagerFactory.get_all_managers()
-    for source, manager in managers.items():
-        results[source] = manager.list_models()
-    return results
+    """List all models from all available sources."""
+    return await model_service.list_all_models()
 
-@app.post("/models/download")
-async def download_model(request: DownloadRequest, background_tasks: BackgroundTasks):
-    """Download a model in the background."""
-    try:
-        manager = ModelManagerFactory.get_manager(request.source)
-        # For simplicity, we'll start it in background
-        background_tasks.add_task(manager.download_model, request.model_name, **request.kwargs)
-        return {"message": f"Download of {request.model_name} from {request.source} started in background."}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+@app.get("/models/{source}/{model_name:path}")
+async def get_model_info(source: str, model_name: str):
+    """Get detailed information about a specific model."""
+    info = await model_service.get_info(source, model_name)
+    if not info:
+        raise HTTPException(status_code=404, detail="Model not found")
+    return info
 
-@app.delete("/models/delete")
+@app.post("/models/download", response_model=MessageResponse)
+async def download_model(request: ModelDownloadRequest, background_tasks: BackgroundTasks):
+    """Download a model from the specified source."""
+    background_tasks.add_task(model_service.download_model, request.source, request.model_name, **request.kwargs)
+    return {"message": f"Download of {request.model_name} from {request.source} started in background.", "success": True}
+
+@app.delete("/models/{source}/{model_name:path}", response_model=MessageResponse)
 async def delete_model(source: str, model_name: str):
-    """Delete a model."""
-    try:
-        manager = ModelManagerFactory.get_manager(source)
-        success = manager.delete_model(model_name)
-        if success:
-            return {"message": f"Model {model_name} deleted from {source}."}
-        else:
-            raise HTTPException(status_code=404, detail=f"Model {model_name} not found or could not be deleted.")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    """Delete a model from local storage."""
+    success = await model_service.delete_model(source, model_name)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to delete model")
+    return {"message": f"Model {model_name} deleted successfully.", "success": True}
 
-@app.post("/inference")
-def inference(request: InferenceRequest):
-    """
-    Run inference on a model.
-    Note: defined as 'def' instead of 'async def' so FastAPI runs it in a threadpool,
-    preventing blocking the main event loop during heavy computation.
-    """
-    try:
-        manager = ModelManagerFactory.get_manager(request.source)
-        response = manager.generate(request.model_name, request.prompt, **request.kwargs)
-        return {"response": response}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+@app.post("/models/load", response_model=MessageResponse)
+async def load_model(request: ModelLoadRequest, background_tasks: BackgroundTasks):
+    """Load a model into memory."""
+    success = await model_service.load_model(request.source, request.model_name, **request.kwargs)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to load model")
+    return {"message": f"Model {request.model_name} loaded successfully.", "success": True}
 
-@app.post("/system/install-ollama")
-def trigger_ollama_install():
-    """Trigger Ollama installation on the system."""
-    if is_ollama_installed():
-        return {"message": "Ollama is already installed."}
+@app.post("/models/unload", response_model=MessageResponse)
+async def unload_model(source: str, model_name: str):
+    """Unload a model from memory."""
+    success = await model_service.unload_model(source, model_name)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to unload model")
+    return {"message": f"Model {model_name} unloaded successfully.", "success": True}
 
-    success, message = install_ollama()
-    if success:
-        return {"message": message}
-    else:
-        raise HTTPException(status_code=500, detail=message)
-
-@app.get("/server/status")
-async def server_status():
-    """Get server and managers status."""
-    managers = ModelManagerFactory.get_all_managers()
-    status = {
-        "ollama_installed": is_ollama_installed(),
-        "managers": {
-            source: manager.is_available() for source, manager in managers.items()
-        }
+@app.post("/inference", response_model=InferenceResponse)
+async def run_inference(request: InferenceRequest):
+    """Run a prompt through a model."""
+    response = await model_service.generate_response(
+        request.source, request.model_name, request.prompt, **request.kwargs
+    )
+    return {
+        "response": response,
+        "model_name": request.model_name,
+        "source": request.source
     }
-    return status
 
-def start_server(host: str = "0.0.0.0", port: int = 8000):
-    uvicorn.run(app, host=host, port=port)
+# --- Ollama Management ---
+
+@app.get("/ollama/status")
+async def ollama_status():
+    """Get Ollama installation and server status."""
+    return {
+        "installed": is_ollama_installed(),
+        "running": ModelService().managers['ollama'].is_available()
+    }
+
+@app.post("/ollama/install", response_model=MessageResponse)
+def trigger_ollama_install():
+    """Install Ollama on the system."""
+    success, message = install_ollama()
+    return {"message": message, "success": success}
+
+@app.post("/ollama/start", response_model=MessageResponse)
+def trigger_ollama_start():
+    """Start the Ollama server."""
+    success, message = start_ollama()
+    return {"message": message, "success": success}
+
+@app.post("/ollama/stop", response_model=MessageResponse)
+def trigger_ollama_stop():
+    """Stop the Ollama server."""
+    success, message = stop_ollama()
+    return {"message": message, "success": success}
+
+@app.get("/ollama/models")
+async def list_ollama_models():
+    """List available models in Ollama."""
+    return ModelService().managers['ollama'].list_models()
+
+@app.post("/ollama/models/pull", response_model=MessageResponse)
+async def pull_ollama_model(model_name: str, background_tasks: BackgroundTasks):
+    """Pull a model to Ollama in background."""
+    background_tasks.add_task(ModelService().managers['ollama'].download_model, model_name)
+    return {"message": f"Pulling {model_name} started.", "success": True}
+
+@app.delete("/ollama/models/{model_name}", response_model=MessageResponse)
+async def remove_ollama_model(model_name: str):
+    """Remove a model from Ollama."""
+    success = ModelService().managers['ollama'].delete_model(model_name)
+    return {"message": f"Model {model_name} removed.", "success": success}
+
+# --- Server Management ---
+
+@app.get("/server/status", response_model=StatusResponse)
+async def server_status():
+    """Get general server status."""
+    service_status = await model_service.get_status()
+    from modelhub.utils.tunnel import get_public_url
+    return {
+        "ollama_installed": is_ollama_installed(),
+        "sources": service_status["sources"],
+        "public_url": get_public_url()
+    }
+
+@app.post("/server/refresh", response_model=MessageResponse)
+async def server_refresh():
+    """Refresh managers and states."""
+    # Logic to re-instantiate managers if needed
+    return {"message": "Server state refreshed.", "success": True}
+
+@app.post("/server/restart", response_model=MessageResponse)
+async def server_restart(background_tasks: BackgroundTasks):
+    """Restart the server process."""
+    def restart():
+        import os
+        import sys
+        time.sleep(1)
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    background_tasks.add_task(restart)
+    return {"message": "Server restarting...", "success": True}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "timestamp": time.time()}

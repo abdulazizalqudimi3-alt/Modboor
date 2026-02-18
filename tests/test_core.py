@@ -1,19 +1,15 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from modelhub.core.factory import ModelManagerFactory
+from modelhub.core.service import ModelService
 from modelhub.core.huggingface import HuggingFaceManager
 from modelhub.core.ollama import OllamaManager
 
-def test_factory():
-    hf = ModelManagerFactory.get_manager("huggingface")
-    assert isinstance(hf, HuggingFaceManager)
-
-    ollama_mgr = ModelManagerFactory.get_manager("ollama")
-    assert isinstance(ollama_mgr, OllamaManager)
+@pytest.fixture
+def model_service():
+    return ModelService()
 
 @patch("modelhub.core.huggingface.scan_cache_dir")
 def test_hf_list_models(mock_scan):
-    # Mocking scan_cache_dir return
     mock_repo = MagicMock()
     mock_repo.repo_id = "test/model"
     mock_repo.repo_type = "model"
@@ -45,3 +41,13 @@ def test_ollama_list_models(mock_list):
     models = mgr.list_models()
     assert len(models) == 1
     assert models[0]["name"] == "llama2"
+
+@pytest.mark.asyncio
+async def test_service_list_models(model_service):
+    with patch("modelhub.core.huggingface.HuggingFaceManager.list_models", return_value=[{"name": "hf_model"}]), \
+         patch("modelhub.core.ollama.OllamaManager.list_models", return_value=[{"name": "ollama_model"}]):
+        results = await model_service.list_all_models()
+        assert "huggingface" in results
+        assert "ollama" in results
+        assert results["huggingface"][0]["name"] == "hf_model"
+        assert results["ollama"][0]["name"] == "ollama_model"

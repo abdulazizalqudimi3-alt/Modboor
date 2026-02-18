@@ -1,77 +1,94 @@
-# AI Model Hub
+# AI Model Hub: Enterprise-Grade Model Management
 
-A powerful and extensible Python library and FastAPI server to manage AI models from Hugging Face and Ollama.
+`modelhub` is a professional, production-ready Python library and FastAPI server designed for managing, deploying, and orchestrating AI models from multiple sources, specifically **Hugging Face** and **Ollama**.
 
-## Features
+## 🚀 Key Features
 
-- **Unified Interface**: Manage models from both Hugging Face and Ollama using a single API.
-- **Model Management**: List, download, and delete models.
-- **Inference**: Run inference on downloaded models.
-- **System Integration**: Install Ollama directly via the API.
-- **Public Access**: Integrated `pyngrok` support to expose the server to the internet.
-- **Scalable Architecture**: Built with SOLID principles and Clean Code in mind.
+- **Unified Interface**: Single API for managing both Hugging Face and Ollama models.
+- **Production-Grade**: Built with Clean Architecture, SOLID principles, and professional logging.
+- **Full Model Lifecycle**: Download, Load, Run Inference, Unload, and Delete models.
+- **Ollama Orchestration**: Automated installation, server management (start/stop), and model pulling.
+- **Public Tunneling**: Built-in support for `pyngrok` to expose your server publicly.
+- **Asynchronous Core**: Fully async service layer for high-performance operations.
+- **Auto-Initialization**: Pre-configure models to download and install on startup.
+- **Cross-Platform**: Designed for Linux, macOS, and Windows.
 
-## Project Structure
+## 🛠 Project Structure
 
-- `modelhub/core/`: Core logic and abstract base classes for model management.
-- `modelhub/api/`: FastAPI server implementation and endpoints.
-- `modelhub/utils/`: Utility functions for system tasks and tunneling.
-- `run.py`: Entry point for starting the server with pre-launch configurations.
+- `modelhub/core/`: Business logic, managers, and service layer.
+- `modelhub/api/`: FastAPI server, schemas, and controllers.
+- `modelhub/config/`: Centralized settings and logging configuration.
+- `modelhub/utils/`: System utilities and tunneling support.
+- `run.py`: Production entry point.
+- `setup.py`: Package installation configuration.
 
-## Installation
-
-```bash
-pip install fastapi uvicorn ollama huggingface-hub pyngrok python-dotenv pydantic transformers torch
-```
-
-## Usage
-
-### Starting the Server
-
-You can start the server using `run.py`. It supports several flags for customization:
+## 📦 Installation
 
 ```bash
-python run.py --port 8000 --install-ollama --models "ollama:llama3,huggingface:gpt2" --ngrok
+pip install .
 ```
 
-- `--port`: Port to run the server on (default: 8000).
-- `--install-ollama`: Automatically install Ollama if not present.
-- `--models`: Comma-separated list of models to ensure are downloaded on startup.
-- `--ngrok`: Expose the server via an ngrok public URL.
-- `--ngrok-token`: Your ngrok authentication token.
-- `--hf-cache`: Custom directory for Hugging Face models.
-- `--ollama-host`: Custom URL for the Ollama server.
+Dependencies: `fastapi`, `uvicorn`, `ollama`, `huggingface-hub`, `pyngrok`, `pydantic-settings`, `transformers`, `torch`.
 
-### Configuration
+## 💻 Usage as a Library
 
-You can also use a `.env` file to manage settings:
+```python
+from modelhub import start_server, ModelService
+
+# Start the server programmatically
+start_server(
+    port=8000,
+    public=True,
+    auto_install_ollama=True,
+    initial_models=["ollama:llama3"]
+)
+
+# Use the service directly
+service = ModelService()
+models = service.list_all_models()
+```
+
+## 🌐 API Reference
+
+### Model Management
+- `GET /models`: List all available models.
+- `GET /models/{source}/{model_name}`: Get detailed model info.
+- `POST /models/download`: Download a new model (Background Task).
+- `POST /models/load`: Load a model into memory.
+- `POST /models/unload`: Unload model to free resources.
+- `POST /inference`: Run AI generation.
+
+### Ollama Management
+- `GET /ollama/status`: Check installation and server status.
+- `POST /ollama/install`: Install Ollama on the host.
+- `POST /ollama/start`: Start the Ollama process.
+- `POST /ollama/stop`: Stop the Ollama process.
+- `GET /ollama/models`: List Ollama-specific models.
+
+### Server Control
+- `GET /server/status`: Overall system health and public URL.
+- `POST /server/restart`: Restart the API server.
+- `GET /health`: Basic health check.
+
+## ⚙️ Configuration
+
+Use a `.env` file or environment variables:
 
 ```env
-HF_CACHE_DIR=/path/to/cache
-OLLAMA_HOST=http://localhost:11434
+API_PORT=8000
+USE_NGROK=True
 NGROK_AUTHTOKEN=your_token
+HF_CACHE_DIR=/path/to/custom/cache
+AUTO_INSTALL_OLLAMA=True
+INITIAL_MODELS=ollama:llama3,huggingface:gpt2
 ```
 
-### API Endpoints
-
-- `GET /models/list`: Lists all available models from all sources.
-- `POST /models/download`: Downloads a model.
-  - Body: `{"source": "huggingface", "model_name": "gpt2"}`
-- `POST /inference`: Runs a prompt through a model.
-  - Body: `{"source": "ollama", "model_name": "llama3", "prompt": "Hello!"}`
-- `DELETE /models/delete`: Deletes a model.
-  - Query params: `source`, `model_name`
-- `POST /system/install-ollama`: Triggers Ollama installation.
-- `GET /server/status`: Checks the status of the server and model managers.
-
-## Development
-
-Run tests using pytest:
+## 🧪 Testing
 
 ```bash
 pytest tests/
 ```
 
-## Architecture
+## 🛡 License
 
-The project follows the Strategy and Factory design patterns. `BaseModelManager` defines the interface, and concrete implementations (`HuggingFaceManager`, `OllamaManager`) handle source-specific logic. The `ModelManagerFactory` provides a centralized way to access these managers, ensuring high cohesion and low coupling.
+MIT

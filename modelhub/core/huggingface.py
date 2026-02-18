@@ -1,18 +1,20 @@
 import os
 from typing import List, Dict, Any, Optional
-from huggingface_hub import hf_hub_download, list_repo_files, snapshot_download, scan_cache_dir
+from huggingface_hub import snapshot_download, scan_cache_dir, model_info
 from .base import BaseModelManager
 from modelhub.config.settings import settings
+from modelhub.config.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 class HuggingFaceManager(BaseModelManager):
     """
-    Manager for Hugging Face models.
+    Manager for Hugging Face models using huggingface_hub.
     """
 
+    _model_cache: Dict[str, Any] = {}
+
     def list_models(self) -> List[Dict[str, Any]]:
-        """
-        List all downloaded HF models from the local cache.
-        """
         try:
             cache_info = scan_cache_dir(cache_dir=settings.HF_CACHE_DIR)
             models = []
@@ -27,66 +29,85 @@ class HuggingFaceManager(BaseModelManager):
                     })
             return models
         except Exception as e:
-            print(f"Error listing HF models: {e}")
+            logger.error(f"Error listing HF models: {e}")
             return []
 
     def download_model(self, model_name: str, **kwargs) -> bool:
-        """
-        Download a model from Hugging Face Hub.
-        """
         try:
-            print(f"Downloading HF model: {model_name}...")
+            logger.info(f"Downloading HF model: {model_name}...")
             if "cache_dir" not in kwargs and settings.HF_CACHE_DIR:
                 kwargs["cache_dir"] = settings.HF_CACHE_DIR
             snapshot_download(repo_id=model_name, **kwargs)
             return True
         except Exception as e:
-            print(f"Error downloading HF model {model_name}: {e}")
+            logger.error(f"Error downloading HF model {model_name}: {e}")
             return False
 
     def delete_model(self, model_name: str) -> bool:
-        """
-        Delete a model from the HF local cache.
-        Note: This is a bit complex with scan_cache_dir.
-        For simplicity, we'll try to find the revision and delete it.
-        """
         try:
             cache_info = scan_cache_dir(cache_dir=settings.HF_CACHE_DIR)
             for repo in cache_info.repos:
                 if repo.repo_id == model_name:
                     delete_strategy = cache_info.delete_revisions(*[r.commit_hash for r in repo.revisions])
                     delete_strategy.execute()
+                    # Clear from cache if loaded
+                    if model_name in self._model_cache:
+                        del self._model_cache[model_name]
                     return True
             return False
         except Exception as e:
-            print(f"Error deleting HF model {model_name}: {e}")
+            logger.error(f"Error deleting HF model {model_name}: {e}")
             return False
 
-    _model_cache: Dict[str, Any] = {}
-
     def generate(self, model_name: str, prompt: str, **kwargs) -> str:
-        """
-        Generate response using transformers pipeline.
-        Caches the model pipeline for better performance.
-        """
         try:
             from transformers import pipeline
 
-            if model_name not in self._model_cache:
-                print(f"Loading HF model {model_name} into memory...")
-                # Basic text-generation pipeline
-                # For real usage, you'd want to manage device (CPU/GPU)
-                self._model_cache[model_name] = pipeline("text-generation", model=model_name, **kwargs)
+            # Extract task if provided, otherwise default to text-generation
+            task = kwargs.pop("task", "text-generation")
 
-            pipe = self._model_cache[model_name]
+            cache_key = f"{model_name}:{task}"
+
+            if cache_key not in self._model_cache:
+                logger.info(f"Loading HF model {model_name} for task {task} into memory...")
+                self._model_cache[cache_key] = pipeline(task, model=model_name, **kwargs)
+
+            pipe = self._model_cache[cache_key]
             result = pipe(prompt)
 
             if isinstance(result, list) and len(result) > 0:
                 return result[0].get("generated_text", "")
             return str(result)
         except Exception as e:
-            return f"Error during HF inference: {str(e)}"
+            logger.error(f"Error during HF inference: {e}")
+            return f"Error: {str(e)}"
 
     def is_available(self) -> bool:
-        # Hugging Face Hub is a library, so as long as it's installed and we have internet (for downloads), it's available.
         return True
+
+    def get_model_info(self, model_name: str) -> Optional[Dict[str, Any]]:
+        try:
+            info = model_info(model_name)
+            return {
+                "id": info.modelId,
+                "author": info.author,
+                "last_modified": str(info.lastModified),
+                "tags": info.tags,
+                "downloads": getattr(info, "downloads", 0),
+                "likes": getattr(info, "likes", 0),
+            }
+        except Exception as e:
+            logger.error(f"Error getting HF model info for {model_name}: {e}")
+            return None
+
+    def unload_model(self, model_name: str) -> bool:
+        """Specific for HF to free memory."""
+        if model_name in self._model_cache:
+            del self._model_cache[model_name]
+            import gc
+            import torch
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            return True
+        return False
