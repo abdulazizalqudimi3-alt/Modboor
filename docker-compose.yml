@@ -4,12 +4,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./.env:/app/.env
       - ./data:/app/data
       - ./logs:/app/logs
-      - hf_cache:/root/.cache/huggingface
-    environment:
-      - API_PORT=8000
     restart: always
 
   ollama:
@@ -21,5 +17,4 @@ services:
     restart: always
 
 volumes:
-  hf_cache:
   ollama_data:

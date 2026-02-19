@@ -1,6 +1,5 @@
-import os
-from typing import Optional
 from pyngrok import ngrok
+from typing import Optional
 from modelhub.config.settings import settings
 from modelhub.config.logging_config import get_logger
 

@@ -1,13 +1,13 @@
 fastapi
 uvicorn
-ollama
 huggingface-hub
+transformers
+ollama
 pyngrok
-python-dotenv
 pydantic
 pydantic-settings
-transformers
-torch
+python-dotenv
 httpx
 pytest
 pytest-asyncio
+torch

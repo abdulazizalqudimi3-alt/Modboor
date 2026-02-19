@@ -1,130 +1,74 @@
-# AI Model Hub: Enterprise Model Management & Inference Framework
+# AI Model Hub: Enterprise-Grade Model Management
 
-`modelhub` is a high-performance, production-ready Python library and FastAPI server designed for the seamless management, deployment, and orchestration of AI models from **Hugging Face** and **Ollama**.
-
----
+`modelhub` is a professional Python library and FastAPI server designed for managing, deploying, and orchestrating AI models from **Hugging Face** and **Ollama**.
 
 ## 🌟 Key Features
 
-- **Unified Interface**: Single, consistent API for Hugging Face and Ollama.
+- **Unified Interface**: Single API for both Hugging Face and Ollama.
+- **Production-Grade**: Built with Clean Architecture, SOLID principles, and professional logging.
 - **Full Model Lifecycle**: Download, Load, Run Inference, Unload, and Delete.
-- **Advanced Ollama Orchestration**: Automated installation and process management.
-- **Production-Grade Architecture**: Built with SOLID principles, Factory patterns, and a clean Service layer.
-- **Public Accessibility**: Integrated `pyngrok` for instant public URLs.
-- **Docker Ready**: Includes `Dockerfile` and `docker-compose.yml` for containerized deployment.
-- **Highly Extensible**: Easily add new model sources by implementing a single interface.
-- **Comprehensive API**: Full RESTful control over models and system status.
-
----
+- **Ollama Orchestration**: Automated installation, server management, and model pulling.
+- **Public Tunneling**: Built-in support for `pyngrok` for instant public URLs.
+- **Docker Ready**: Includes `Dockerfile` and `docker-compose.yml`.
 
 ## 🏗 Project Architecture
 
-The project follows **Clean Architecture** principles:
-- **`modelhub/core/`**: Core business logic and model source abstractions.
-- **`modelhub/api/`**: REST API implementation using FastAPI.
-- **`modelhub/config/`**: Centralized configuration and professional logging.
-- **`modelhub/utils/`**: System-level utilities for platform integration.
-
----
+- **`modelhub/core/`**: Interface definitions and Factory pattern.
+- **`modelhub/managers/`**: Specialized managers for HF and Ollama.
+- **`modelhub/api/`**: FastAPI app, schemas, and controllers.
+- **`modelhub/utils/`**: System utilities and tunneling.
+- **`modelhub/config/`**: Centralized configuration and logging.
 
 ## 🚀 Quick Start
 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-repo/modelhub.git
-cd modelhub
-
-# Install as a package
 pip install .
-```
-
-### Running with Docker
-
-```bash
-# Start with Docker Compose
-docker-compose up -d
 ```
 
 ### Starting the Server (CLI)
 
 ```bash
-python run.py --port 8000 --public --auto-install-ollama
+python run.py --port 8000 --public --auto-install-ollama --models "ollama:llama3,hf:gpt2"
 ```
-
----
 
 ## 💻 Library Usage
 
 ```python
-from modelhub import start_server, ModelService, HuggingFaceManager, OllamaManager
+from modelhub import start_server, ModelService
 
-# Programmatic server startup
-start_server(
-    port=8080,
-    public=True,
-    initial_models=["ollama:llama3", "hf:gpt2"]
-)
+# Start server
+start_server(port=8000, public=True)
 
-# Using managers directly
-hf = HuggingFaceManager()
-hf.download_model("gpt2")
-print(hf.list_downloaded_models())
-
-ollama = OllamaManager()
-ollama.pull_model("mistral")
-print(ollama.list_models())
+# Use Service Layer directly
+service = ModelService()
+models = await service.list_all_models()
 ```
-
----
 
 ## 🌐 API Endpoints
 
 ### Model Management
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/models` | List all available models. |
-| `GET` | `/models/{model_name}` | Get detailed model metadata. |
-| `POST` | `/models/download` | Download a new model (Background). |
-| `POST` | `/models/load` | Load a model into memory. |
-| `POST` | `/models/unload` | Unload a model to free resources. |
-| `POST` | `/inference` | Run inference on a model. |
-| `DELETE` | `/models/{model_name}` | Delete a local model. |
+- `GET /models`: List all available models.
+- `GET /models/{model_name}`: Get detailed info.
+- `POST /models/download`: Download a new model (Background).
+- `POST /models/load`: Load model into memory.
+- `POST /models/unload`: Unload model from memory.
+- `POST /inference`: Run generation.
 
 ### Ollama Management
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/ollama/status` | Check Ollama installation & server status. |
-| `POST` | `/ollama/install` | Install Ollama on the host system. |
-| `POST` | `/ollama/start` | Start the Ollama server process. |
-| `POST` | `/ollama/stop` | Stop the Ollama server process. |
-| `POST` | `/ollama/models/pull` | Pull a model to Ollama. |
-
----
-
-## ⚙️ Configuration
-
-You can configure the system using environment variables or a `.env` file:
-
-- `API_PORT`: Server port (default: 8000).
-- `HF_CACHE_DIR`: Path to Hugging Face cache.
-- `OLLAMA_HOST`: Host URL for Ollama.
-- `NGROK_AUTHTOKEN`: ngrok token for public tunneling.
-- `INITIAL_MODELS`: Comma-separated list of models to pre-load.
-
----
+- `GET /ollama/status`: Check status.
+- `POST /ollama/install`: Trigger installation.
+- `POST /ollama/start`: Start server.
+- `POST /ollama/stop`: Stop server.
+- `POST /ollama/models/pull`: Pull model to Ollama.
 
 ## 🧪 Testing
-
-The project includes a comprehensive test suite using `pytest`.
 
 ```bash
 pytest tests/
 ```
 
----
-
 ## 🛡 License
 
-MIT License. See [LICENSE](LICENSE) for details.
+MIT

@@ -13,17 +13,17 @@ class BaseModelManager(ABC):
         pass
 
     @abstractmethod
-    def download_model(self, model_name: str, **kwargs) -> bool:
+    def download_model(self, model_id: str, **kwargs) -> bool:
         """Download a specific model."""
         pass
 
     @abstractmethod
-    def delete_model(self, model_name: str) -> bool:
+    def delete_model(self, model_id: str) -> bool:
         """Delete a specific model from local storage."""
         pass
 
     @abstractmethod
-    def generate(self, model_name: str, prompt: str, **kwargs) -> str:
+    def generate(self, model_id: str, prompt: str, **kwargs) -> str:
         """Run inference on the model."""
         pass
 
@@ -33,16 +33,16 @@ class BaseModelManager(ABC):
         pass
 
     @abstractmethod
-    def get_model_info(self, model_name: str) -> Optional[Dict[str, Any]]:
+    def get_model_info(self, model_id: str) -> Optional[Dict[str, Any]]:
         """Get detailed information about a model."""
         pass
 
     @abstractmethod
-    def load_model(self, model_name: str, **kwargs) -> bool:
+    def load_model(self, model_id: str, **kwargs) -> bool:
         """Load a model into memory."""
         pass
 
     @abstractmethod
-    def unload_model(self, model_name: str) -> bool:
+    def unload_model(self, model_id: str) -> bool:
         """Unload a model from memory."""
         pass
