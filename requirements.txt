@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+huggingface-hub
+transformers
+ollama
+pyngrok
+pydantic
+pydantic-settings
+python-dotenv
+httpx
+pytest
+pytest-asyncio
+torch
